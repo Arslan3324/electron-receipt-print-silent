@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Receipt Preview & Print</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 16px; }
+    .bar { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+    input[type=url] { width: 100%; padding: 10px 12px; font-size: 15px; }
+    button { padding: 10px 14px; font-size: 15px; cursor: pointer; }
+    #viewer { margin-top: 12px; width: 100%; height: calc(100vh - 100px); border: 1px solid #e5e7eb; border-radius: 6px; }
+    .msg { margin-top: 8px; font-size: 13px; color: #374151; }
+    .err { color: #b00020; }
+    .ok { color: #0a7d32; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <input id="url" type="url" placeholder="https://app.sparkypos.com/print/order/receipt/..." />
+    <button id="loadBtn">Load</button>
+    <button id="printBtn" disabled>Print…</button>
+  </div>
+  <div id="msg" class="msg"></div>
+
+  <!-- webview runs in its own process & can load cross-origin pages -->
+  <webview id="viewer" allowpopups></webview>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const urlInput = $("#url");
+    const loadBtn = $("#loadBtn");
+    const printBtn = $("#printBtn");
+    const viewer = $("#viewer");
+    const msg = $("#msg");
+
+    function setMsg(text, cls = "") {
+      msg.className = "msg " + cls;
+      msg.textContent = text || "";
+      console.log(text);
+    }
+
+    function isValidUrl(u) {
+      try { new URL(u); return true; } catch { return false; }
+    }
+
+    loadBtn.addEventListener("click", () => {
+      const url = urlInput.value.trim();
+      if (!isValidUrl(url)) {
+        setMsg("Please enter a valid URL.", "err");
+        return;
+      }
+      setMsg("Loading…");
+      printBtn.disabled = true;
+      viewer.src = url;
+    });
+
+    // When the webview finishes loading, enable the print button
+    viewer.addEventListener("did-finish-load", () => {
+      setMsg("Loaded. You can click Print to open the print dialog.", "ok");
+      printBtn.disabled = false;
+    });
+
+    // Print button: ask main process to print the webview’s contents
+    printBtn.addEventListener("click", async () => {
+      try {
+        const wcId = viewer.getWebContentsId();  // webContents id of the webview
+        const res = await window.api.printByWebContentsId(wcId);
+        if (!res.ok) setMsg("Print failed: " + (res.error || "unknown error"), "err");
+      } catch (e) {
+        setMsg("Error starting print: " + (e?.message || e), "err");
+      }
+    });
+
+    // Optional default URL for quick testing
+    urlInput.value = "https://app.sparkypos.com/print/order/receipt/99HN1zw7A7nIJ7Ek8Awqdw==";
+  </script>
+</body>
+</html>
